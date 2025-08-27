@@ -164,6 +164,13 @@ create_options_structs! {
     clap(long)
     pub enhanced_errors: bool,
 
+    /// Enter interactive REPL mode
+    ///
+    /// When enabled, mdq will start an interactive session where you can
+    /// execute multiple queries without restarting the program.
+    clap(long, short)
+    pub repl: bool,
+
     // See: tree.rs > Lookups::unknown_markdown.
     clap(long, hide = true)
     pub allow_unknown_markdown: bool,
@@ -209,6 +216,7 @@ impl Default for RunOptions {
             selectors: "".to_string(),
             quiet: false,
             enhanced_errors: false,
+            repl: false,
             allow_unknown_markdown: false,
             markdown_file_paths: vec![],
         }
@@ -267,6 +275,16 @@ impl CliOptions {
             return false;
         }
         true
+    }
+
+    /// Gets the REPL flag value
+    pub fn repl(&self) -> bool {
+        self.repl
+    }
+
+    /// Gets the markdown file paths
+    pub fn markdown_file_paths(&self) -> &[String] {
+        &self.markdown_file_paths
     }
 }
 

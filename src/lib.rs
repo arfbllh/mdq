@@ -78,6 +78,7 @@ mod query;
 pub mod run;
 pub mod select;
 mod util;
+pub mod repl;
 
 #[cfg(test)]
 mod tests {

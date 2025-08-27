@@ -21,9 +21,6 @@ impl MockOsFacade {
         &self.error_output
     }
 
-    fn get_stdout_output(&self) -> String {
-        String::from_utf8_lossy(&self.stdout_output).into_owned()
-    }
 }
 
 impl OsFacade for MockOsFacade {

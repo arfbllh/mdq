@@ -1,5 +1,6 @@
 use clap::Parser;
 use mdq::run::{CliOptions, Error, OsFacade};
+use mdq::repl::Repl;
 use std::io;
 use std::io::{stdin, stdout, Read};
 use std::process::ExitCode;
@@ -34,9 +35,47 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     }
 
+    // Check if REPL mode is requested
+    if cli.repl() {
+        return match run_repl_mode(&cli) {
+            Ok(_) => ExitCode::SUCCESS,
+            Err(e) => {
+                eprintln!("REPL error: {}", e);
+                ExitCode::FAILURE
+            }
+        };
+    }
+
     if mdq::run::run(&cli.into(), &mut RealOs) {
         ExitCode::SUCCESS
     } else {
         ExitCode::FAILURE
     }
+}
+
+/// Runs the REPL mode
+fn run_repl_mode(cli: &CliOptions) -> io::Result<()> {
+    let run_options = cli.clone().into();
+    let mut repl = Repl::new(run_options)?;
+    
+    // If files are provided, load the first one
+    if !cli.markdown_file_paths().is_empty() {
+        let first_file = &cli.markdown_file_paths()[0];
+        if first_file != "-" {
+            // Load from file
+            let content = std::fs::read_to_string(first_file)
+                .map_err(|e| io::Error::other(format!("Failed to read file {}: {}", first_file, e)))?;
+            repl.load_document(content)
+                .map_err(|e| io::Error::other(format!("Failed to load document: {}", e)))?;
+        } else {
+            // Load from stdin
+            let mut content = String::new();
+            stdin().read_to_string(&mut content)?;
+            repl.load_document(content)
+                .map_err(|e| io::Error::other(format!("Failed to load document: {}", e)))?;
+        }
+    }
+    
+    // Start REPL
+    repl.run()
 }
