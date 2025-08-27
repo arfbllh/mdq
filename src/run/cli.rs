@@ -157,6 +157,13 @@ create_options_structs! {
     clap(long, short)
     pub quiet: bool,
 
+    /// Enable enhanced error reporting with suggestions and context.
+    ///
+    /// When enabled, parse errors will include helpful suggestions for fixing common issues
+    /// and provide more context about what went wrong.
+    clap(long)
+    pub enhanced_errors: bool,
+
     // See: tree.rs > Lookups::unknown_markdown.
     clap(long, hide = true)
     pub allow_unknown_markdown: bool,
@@ -201,6 +208,7 @@ impl Default for RunOptions {
             wrap_width: None,
             selectors: "".to_string(),
             quiet: false,
+            enhanced_errors: false,
             allow_unknown_markdown: false,
             markdown_file_paths: vec![],
         }

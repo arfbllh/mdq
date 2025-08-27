@@ -63,6 +63,12 @@ Options:
   -q, --quiet
           Quiet: do not print anything to stdout. The exit code will still be 0 if any elements match, and non-0 if none do
 
+      --enhanced-errors
+          Enable enhanced error reporting with suggestions and context.
+          
+          When enabled, parse errors will include helpful suggestions for fixing common issues
+          and provide more context about what went wrong.
+
       --[no]-br
           Include breaks between elements in plain and markdown output mode.
           

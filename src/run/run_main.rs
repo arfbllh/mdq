@@ -29,6 +29,9 @@ pub enum Error {
 
     /// An error occurred during selection processing.
     SelectionError(SelectError),
+
+    /// Other error types (used for enhanced error reporting).
+    Other(String),
 }
 
 impl std::error::Error for Error {}
@@ -113,6 +116,9 @@ impl Display for Error {
                 writeln!(f, "Selection error:")?;
                 writeln!(f, "{err}")
             }
+            Error::Other(msg) => {
+                write!(f, "{}", msg)
+            }
         }
     }
 }
@@ -171,13 +177,19 @@ pub trait OsFacade {
 /// string in [`RunOptions::selectors`], and then writes them to the given [`OsFacade`] in the format specified by
 /// [`RunOptions::output`].
 pub fn run(cli: &RunOptions, os: &mut impl OsFacade) -> bool {
-    match run_or_error(cli, os) {
-        Ok(ok) => ok,
-        Err(err) => {
-            os.write_error(err);
-            false
+            match run_or_error(cli, os) {
+            Ok(ok) => ok,
+            Err(err) => {
+                if cli.enhanced_errors {
+                    let enhanced_error = display_error_with_enhancements(&err, true);
+                    // Write the enhanced error through the OsFacade for testing
+                    os.write_error(Error::Other(enhanced_error));
+                } else {
+                    os.write_error(err);
+                }
+                false
+            }
         }
-    }
 }
 
 fn run_or_error(cli: &RunOptions, os: &mut impl OsFacade) -> Result<bool, Error> {
@@ -227,4 +239,25 @@ fn run_or_error(cli: &RunOptions, os: &mut impl OsFacade) -> Result<bool, Error>
     }
 
     Ok(found_any)
+}
+
+/// Enhanced error display with suggestions when enabled.
+pub(crate) fn display_error_with_enhancements(err: &Error, enhanced_errors: bool) -> String {
+    if !enhanced_errors {
+        return err.to_string();
+    }
+
+    match err {
+        Error::QueryParse(query_err) => {
+            let mut result = String::new();
+            result.push_str("Syntax error in select specifier:\n");
+            
+            // Use enhanced error reporting with suggestions
+            let enhanced_error = query_err.error.to_string_with_suggestions(&query_err.query_string);
+            result.push_str(&enhanced_error);
+            
+            result
+        }
+        _ => err.to_string(),
+    }
 }

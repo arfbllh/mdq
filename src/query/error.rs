@@ -1,6 +1,51 @@
 use pest::Span;
 use std::fmt::{Display, Formatter};
 
+/// Converts a pest Rule to a human-readable string.
+fn rule_to_string(rule: &crate::query::pest::Rule) -> &'static str {
+    match rule {
+        crate::query::pest::Rule::EOI => "end of input",
+        crate::query::pest::Rule::WHITESPACE => "whitespace",
+        crate::query::pest::Rule::top => "valid query",
+        crate::query::pest::Rule::selector_chain => "one or more selectors",
+        crate::query::pest::Rule::selector => "selector",
+        crate::query::pest::Rule::selector_delim | crate::query::pest::Rule::explicit_space => "space",
+        crate::query::pest::Rule::select_section | crate::query::pest::Rule::section_start => "#",
+        crate::query::pest::Rule::select_list_item | crate::query::pest::Rule::list_start => "- or 1.",
+        crate::query::pest::Rule::list_ordered => "-",
+        crate::query::pest::Rule::list_task_options => "[ ], [x], or [?]",
+        crate::query::pest::Rule::task_checked => "[x]",
+        crate::query::pest::Rule::task_unchecked => "[ ]",
+        crate::query::pest::Rule::task_either => "[?]",
+        crate::query::pest::Rule::task_end => "]",
+        crate::query::pest::Rule::select_link | crate::query::pest::Rule::link_start => "[ or ![",
+        crate::query::pest::Rule::image_start => "![",
+        crate::query::pest::Rule::select_block_quote | crate::query::pest::Rule::select_block_quote_start => ">",
+        crate::query::pest::Rule::select_code_block | crate::query::pest::Rule::code_block_start => "```",
+        crate::query::pest::Rule::select_front_matter | crate::query::pest::Rule::front_matter_start => "+++",
+        crate::query::pest::Rule::select_html | crate::query::pest::Rule::html_start => "</>",
+        crate::query::pest::Rule::select_paragraph | crate::query::pest::Rule::select_paragraph_start => "P:",
+        crate::query::pest::Rule::select_table | crate::query::pest::Rule::table_start => ":-:",
+        crate::query::pest::Rule::string
+        | crate::query::pest::Rule::string_for_unit_tests__do_not_use_angle
+        | crate::query::pest::Rule::string_for_unit_tests__do_not_use_pipe => "string",
+        crate::query::pest::Rule::unquoted_string => "unquoted string",
+        crate::query::pest::Rule::regex => "regex",
+        crate::query::pest::Rule::regex_char => "regex character",
+        crate::query::pest::Rule::regex_escaped_slash => "/",
+        crate::query::pest::Rule::regex_normal_char => "regex character",
+        crate::query::pest::Rule::regex_replacement_segment => "regex replacement",
+        crate::query::pest::Rule::quoted_string => "quoted string",
+        crate::query::pest::Rule::quoted_char => "character in quoted string",
+        crate::query::pest::Rule::asterisk => "*",
+        crate::query::pest::Rule::anchor_start => "^",
+        crate::query::pest::Rule::anchor_end => "$",
+        crate::query::pest::Rule::quoted_plain_chars => "character in quoted string",
+        crate::query::pest::Rule::escaped_char => "escape sequence",
+        crate::query::pest::Rule::unicode_seq => "unicode sequence",
+    }
+}
+
 /// An error representing an invalid selector query.
 ///
 /// <div class="warning">
@@ -87,6 +132,59 @@ impl ParseError {
             },
         }
     }
+
+    /// Gets a string suitable for displaying to a user, including suggestions for the query.
+    ///
+    /// This is useful for providing context when the error is related to a specific query.
+    ///
+    /// ```
+    /// use mdq::select::Selector;
+    /// let query_text = "$ ! invalid query string ! $";
+    /// let parse_error = Selector::try_from(query_text).expect_err("expected an error");
+    /// let output = parse_error.to_string_with_suggestions(query_text);
+    /// assert!(output.contains("expected valid query"));
+    /// assert!(output.contains("Suggestions:"));
+    /// assert!(output.contains("Use # for sections"));
+    /// ```
+    pub fn to_string_with_suggestions(&self, query_text: &str) -> String {
+        match &self.inner {
+            InnerParseError::Pest(e) => {
+                let rule = extract_failed_rule_from_pest_error(e);
+                let mut error_string = format!("{e}");
+                if let Some(rule_name) = rule {
+                    error_string.push_str(&format!("\n\nExpected: `{}`", rule_name));
+                } else {
+                    // For custom errors, provide general suggestions
+                    error_string.push_str("\n\nSuggestions:");
+                    error_string.push_str("\n  • Use # for sections (e.g., '# My Section')");
+                    error_string.push_str("\n  • Use - for list items (e.g., '- List item')");
+                    error_string.push_str("\n  • Use [] for links (e.g., '[text](url)')");
+                    error_string.push_str("\n  • Use > for blockquotes (e.g., '> Quote text')");
+                    error_string.push_str("\n  • Use ``` for code blocks (e.g., '```rust code')");
+                    error_string.push_str("\n  • Use +++ for front matter (e.g., '+++ toml')");
+                    error_string.push_str("\n  • Use </> for HTML (e.g., '</> <div>')");
+                    error_string.push_str("\n  • Use P: for paragraphs (e.g., 'P: paragraph text')");
+                    error_string.push_str("\n  • Use :-: for tables (e.g., ':-: column | row')");
+                    error_string.push_str("\n  • Use | to separate multiple selectors (e.g., '# Section | - List item')");
+                }
+                error_string
+            }
+            InnerParseError::Other(span, message) => match Span::new(query_text, span.start, span.end) {
+                None => message.to_string(),
+                Some(span) => {
+                    let pest_err = crate::query::Error::new_from_span(span, message.to_string());
+                    let rule = extract_failed_rule_from_pest_error(&pest_err);
+                    let mut error_string = pest_err.to_string();
+                    if let Some(rule_name) = rule {
+                        error_string.push_str(&format!("\n\nExpected: `{}`", rule_name));
+                    } else {
+                        error_string.push_str("\n\n[No rule extracted]");
+                    }
+                    error_string
+                }
+            },
+        }
+    }
 }
 
 impl From<crate::query::Error> for InnerParseError {
@@ -114,5 +212,23 @@ impl From<pest::Span<'_>> for DetachedSpan {
 impl From<&crate::query::Pair<'_>> for DetachedSpan {
     fn from(value: &crate::query::Pair<'_>) -> Self {
         value.as_span().into()
+    }
+}
+
+/// Extracts the failed rule name from a pest error for better error reporting.
+fn extract_failed_rule_from_pest_error(error: &crate::query::Error) -> Option<&str> {
+    // Access the inner pest error to extract rule information
+    let pest_error = &error.pest_error;
+    
+    // Try to extract the expected rule from the error variant
+    match &pest_error.variant {
+        pest::error::ErrorVariant::ParsingError { positives, negatives: _ } => {
+            // Return the first positive rule that was expected
+            positives.first().map(|rule| rule_to_string(rule))
+        }
+        pest::error::ErrorVariant::CustomError { .. } => {
+            // For custom errors, we can't easily determine the rule
+            None
+        }
     }
 }
